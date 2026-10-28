@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简历 · 编辑器</title>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.3/dist/html2pdf.bundle.min.js"></script>
+<style>
+:root{
+  --red:#E63946;
+  --red-bright:#FF5A66;
+  --ink:#141414;
+  --text:#1A1A1A;
+  --text-2:rgba(17,17,17,.78);
+  --muted:rgba(17,17,17,.52);
+  --hair:rgba(17,17,17,.12);
+}
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  background:#E9E9EC;
+  color:var(--text);
+  padding:36px 16px 110px;
+}
+
+/* ============ A4 纸面 ============ */
+.page{
+  width:210mm;
+  min-height:297mm;
+  margin:0 auto;
+  background:#fff;
+  box-shadow:0 6px 32px rgba(0,0,0,.14);
+  display:flex;
+  flex-direction:column;
+}
+
+/* ============ 顶部黑色横幅 ============ */
+#masthead{
+  position:relative;
+  background:var(--ink);
+  color:#fff;
+  padding:30px 42px 26px;
+  display:flex;
+  align-items:center;
+  gap:28px;
+  break-inside:avoid;
+}
+/* 横幅右端双层斜切装饰（浅红大三角 + 深红斜面） */
+.corner-tri{
+  position:absolute;
+  top:0; right:0;
+  height:100%; width:50%;
+  display:block;
+}
+.avatar{
+  position:relative;
+  flex:none;
+  width:86px; height:86px;
+  border-radius:50%;
+  border:2px solid var(--red);
+  background:rgba(255,255,255,.06);
+  overflow:hidden;
+}
+.avatar svg.default-person{
+  position:absolute; inset:0; width:100%; height:100%;
+}
+.avatar img{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+}
+.avatar-mask{
+  position:absolute; inset:0;
+  display:none;
+  flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  background:rgba(20,20,20,.62);
+  color:#fff; font-size:10px;
+  cursor:pointer;
+}
+.avatar-mask svg{ width:16px; height:16px; }
+body.editing .avatar{ cursor:pointer; }
+body.editing .avatar:hover .avatar-mask{ display:flex; }
+
+.masthead-info{ flex:1; min-width:0; }
+.name{
+  font-size:28px; font-weight:700;
+  letter-spacing:2px; line-height:1.2;
+}
+.intent{
+  margin-top:7px;
+  font-size:15px; font-weight:500;
+  color:var(--red-bright);
+  letter-spacing:1px;
+}
+.contacts{
+  margin-top:15px;
+  list-style:none;
+  display:flex; flex-wrap:wrap; gap:7px 24px;
+}
+.contacts li{
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:rgba(255,255,255,.75);
+}
+.contacts li svg{
+  width:12px; height:12px; flex:none;
+  stroke:rgba(255,255,255,.5); fill:none;
+  stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+.tagline{
+  margin-top:14px;
+  display:flex; align-items:center; gap:8px;
+  font-size:11px; color:rgba(255,255,255,.72);
+  letter-spacing:.3px;
+}
+.tagline::before{
+  content:''; flex:none;
+  width:6px; height:6px;
+  background:var(--red-bright);
+  transform:rotate(45deg);
+}
+
+/* ============ 正文区 ============ */
+#content{ padding:16px 42px 26px; flex:1; }
+section{ margin-top:14px; }
+section:first-child{ margin-top:0; }
+
+.sec-title{
+  display:flex; align-items:center; gap:9px;
+  font-size:15px; font-weight:700;
+  color:var(--ink); letter-spacing:3px;
+}
+.sec-title::before{
+  content:''; flex:none;
+  width:5px; height:16px;
+  background:var(--red);
+  border-radius:1px;
+}
+.sec-title::after{
+  content:''; flex:1; height:1px;
+  background:var(--hair);
+}
+
+/* ---- 条目（经历/教育） ---- */
+.item{ position:relative; margin-top:10px; break-inside:avoid; }
+.item-head{
+  display:flex; align-items:baseline;
+  justify-content:space-between; gap:14px;
+}
+.item-head h3{
+  font-size:12.5px; font-weight:600; color:var(--ink);
+  letter-spacing:.3px;
+}
+.item-head h3 .sep{ color:var(--muted); font-weight:400; padding:0 2px; }
+.item-head h3 .job{ color:var(--red); }
+.date{
+  flex:none;
+  font-size:10.5px; color:var(--muted);
+  letter-spacing:.3px;
+}
+ul.desc{
+  margin-top:6px;
+  list-style:none;
+}
+ul.desc li{
+  position:relative;
+  padding-left:14px;
+  font-size:11.5px; line-height:1.62;
+  color:var(--text-2);
+}
+ul.desc li::before{
+  content:''; position:absolute;
+  left:2px; top:8px;
+  width:4px; height:4px;
+  background:var(--red);
+  border-radius:1px;
+}
+
+/* ---- 技能 ---- */
+.skills-grid{
+  margin-top:14px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:11px 34px;
+}
+.skill{
+  display:flex; align-items:center; gap:10px;
+  position:relative;
+  min-height:26px; /* 与悬浮增删按钮垂直错开，保证右侧百分比可点击 */
+  break-inside:avoid;
+}
+.skill-name{
+  flex:none; width:152px;
+  font-size:11.5px; font-weight:600; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.skill-bar{
+  flex:1; height:5px;
+  background:rgba(17,17,17,.08);
+  border-radius:99px;
+  overflow:hidden;
+}
+.skill-bar .fill{
+  display:block; height:100%;
+  background:linear-gradient(90deg,#C1121F,var(--red));
+  border-radius:99px;
+}
+.skill-val{
+  flex:none; width:36px; text-align:right;
+  font-size:10.5px; color:var(--muted);
+}
+
+/* ---- 键值式技能行（数据分析工具：…） ---- */
+.kv-list{
+  margin-top:13px;
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+}
+.kv{
+  position:relative;
+  display:flex; align-items:baseline; gap:12px;
+  break-inside:avoid;
+}
+.kv-label{
+  flex:none; width:82px;
+  font-size:11.5px; font-weight:700; color:var(--red);
+  letter-spacing:.5px;
+}
+.kv-text{
+  flex:1;
+  font-size:11.5px; line-height:1.62;
+  color:var(--text-2);
+}
+
+/* ---- 项目元信息行（工具/产出） ---- */
+ul.desc li.meta{ color:var(--muted); font-size:10.5px; }
+ul.desc li.meta::before{ background:var(--ink); opacity:.35; }
+
+/* ---- 荣誉 ---- */
+.honor-list{
+  margin-top:13px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px 34px;
+}
+.honor{
+  display:flex; align-items:baseline; gap:10px;
+  position:relative;
+  font-size:11.5px; color:var(--text-2);
+  break-inside:avoid;
+}
+.honor-year{
+  flex:none; width:38px;
+  font-size:11px; font-weight:700; color:var(--red);
+  letter-spacing:.5px;
+}
+
+/* ---- 自我评价 ---- */
+.summary{
+  margin-top:13px;
+  font-size:11.5px; line-height:1.7;
+  color:var(--text-2);
+}
+
+/* ============ 编辑态辅助 ============ */
+body.editing [contenteditable="true"]:hover{
+  outline:1.5px dashed rgba(230,57,70,.5);
+  outline-offset:2.5px;
+  border-radius:2px;
+}
+body.editing [contenteditable="true"]:focus{
+  outline:1.5px solid rgba(230,57,70,.85);
+  outline-offset:2.5px;
+  border-radius:2px;
+  background:rgba(230,57,70,.03);
+}
+
+/* ---- 条目增删按钮 ---- */
+.item-tools{
+  position:absolute; top:-11px; right:-4px;
+  display:none; gap:4px; z-index:6;
+  pointer-events:none; /* 容器透明区不拦截文字点击，仅按钮本身可点 */
+}
+body.editing .item:hover .item-tools,
+body.editing .skill:hover .item-tools,
+body.editing .honor:hover .item-tools{ display:flex; }
+.item-tools button{
+  pointer-events:auto;
+  width:16px; height:16px;
+  border:none; border-radius:50%;
+  background:var(--ink); color:#fff;
+  font-size:10px; line-height:16px; text-align:center;
+  cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
+.item-tools .t-add:hover{ background:#000; }
+.item-tools .t-del{ background:var(--red); }
+.item-tools .t-del:hover{ background:#C1121F; }
+
+/* ---- 模块级工具条（整块上移/下移/删除） ---- */
+section{ position:relative; }
+.sec-tools{
+  position:absolute; top:-6px; right:-4px;
+  display:none; gap:4px; z-index:7;
+  pointer-events:none;
+}
+body.editing section:hover > .sec-tools{ display:flex; }
+.sec-tools button{
+  pointer-events:auto;
+  width:18px; height:18px;
+  border:none; border-radius:50%;
+  background:var(--ink); color:#fff;
+  font-size:9px; line-height:18px; text-align:center;
+  cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
+.sec-tools button:hover{ background:#000; }
+.sec-tools .s-del{ background:var(--red); }
+.sec-tools .s-del:hover{ background:#C1121F; }
+
+/* ============ 底部工具条 ============ */
+.toolbar{
+  position:fixed; left:50%; bottom:24px;
+  transform:translateX(-50%);
+  display:flex; align-items:center; gap:4px;
+  background:var(--ink);
+  border-radius:999px;
+  padding:8px 10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.28);
+  z-index:99;
+}
+.toolbar button{
+  border:none; background:transparent;
+  color:rgba(255,255,255,.85);
+  font-size:12px; font-family:inherit;
+  padding:7px 15px;
+  border-radius:999px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .15s;
+}
+.toolbar button:hover{ background:rgba(255,255,255,.14); }
+.toolbar #btnMode.active{ background:rgba(230,57,70,.9); }
+.toolbar #btnMode.active:hover{ background:var(--red); }
+.toolbar #btnPrint{ background:#fff; color:var(--ink); font-weight:600; }
+.toolbar #btnPrint:hover{ background:rgba(255,255,255,.88); }
+.toolbar .tip{
+  font-size:11px; color:rgba(255,255,255,.55);
+  padding:0 10px 0 6px;
+  opacity:0; transition:opacity .3s;
+  white-space:nowrap;
+}
+
+/* ============ 导出态（截图前临时应用） ============ */
+body.exporting{ padding:0; }
+body.exporting .page{ margin:0; box-shadow:none; }
+
+/* ============ 打印 / 导出 PDF ============ */
+@page{ size:A4; margin:0; }
+@media print{
+  body{ background:#fff; padding:0; }
+  .toolbar{ display:none !important; }
+  .page{ margin:0; box-shadow:none; width:210mm; min-height:297mm; }
+  .item-tools{ display:none !important; }
+  .avatar-mask{ display:none !important; }
+  body.editing [contenteditable]{ outline:none !important; background:none !important; }
+  .avatar{ cursor:default; }
+}
+</style>
+</head>
+<body class="editing">
+
+<!-- 隐藏文件选择器（放在纸面外，避免被序列化保存） -->
+<input type="file" id="avatarInput" accept="image/*" hidden>
+
+<div class="toolbar">
+  <button id="btnMode" class="active">● 编辑中</button>
+  <button id="btnPrint">导出 PDF</button>
+  <button id="btnReset">重置</button>
+  <span class="tip" id="tip"></span>
+</div>
+
+<div class="page" id="page">
+
+  <!-- ======= 顶部黑底横幅 ======= -->
+  <header id="masthead">
+    <svg class="corner-tri" viewBox="0 0 400 156" preserveAspectRatio="none" aria-hidden="true">
+      <polygon points="280,0 400,0 400,156 330,156" fill="#8E1A1A"/>
+      <polygon points="280,0 330,156 0,156" fill="#F08A8A"/>
+    </svg>
+    <div class="avatar" id="avatarWrap" title="点击更换头像">
+      <svg class="default-person" viewBox="0 0 24 24" fill="rgba(255,255,255,.26)" aria-hidden="true">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M4 21v-1c0-3.9 3.6-6.5 8-6.5s8 2.6 8 6.5v1H4z"/>
+      </svg>
+      <img id="avatarImg" alt="头像" hidden>
+      <div class="avatar-mask">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>更换头像</span>
+      </div>
+    </div>
+
+    <div class="masthead-info">
+      <h1 class="name" data-edit data-single>彭芷芮</h1>
+      <p class="intent" data-edit data-single>求职意向：商业分析（校招）</p>
+      <ul class="contacts">
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span data-edit data-single>出生年月：2003.02</span>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span data-edit data-single>13922487977</span>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+          <span data-edit data-single>1325691354@qq.com</span>
+        </li>
+      </ul>
+      <p class="tagline" data-edit data-single>会计金融 + 商业分析复合背景，可独立输出英文商业分析报告</p>
+    </div>
+  </header>
+
+  <!-- ======= 白底正文 ======= -->
+  <main id="content">
+
+    <!-- 教育背景 -->
+    <section>
+      <h2 class="sec-title">教育背景</h2>
+      <div class="items">
+        <article class="item">
+          <div class="item-head">
+            <h3 data-edit data-single>新南威尔士大学（QS19）<span class="sep">·</span><span class="job">商业分析与金融 硕士</span></h3>
+            <span class="date" data-edit data-single>2025.02 – 2026.12（预计毕业 · 应届）</span>
+          </div>
+          <ul class="desc" data-edit>
+            <li>核心课程：商业分析方法、商业编程、资本预算与财务决策、商业分析导论、社交媒体数据分析</li>
+            <li>课程项目：社交媒体用户行为分析项目，使用 Python 完成用户分层，搭建转化漏斗，输出增长策略分析报告</li>
+          </ul>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </article>
+
+        <article class="item">
+          <div class="item-head">
+            <h3 data-edit data-single>奥克兰大学（QS67）<span class="sep">·</span><span class="job">会计与金融 本科</span></h3>
+            <span class="date" data-edit data-single>2022.02 – 2024.11</span>
+          </div>
+          <ul class="desc" data-edit>
+            <li>核心课程：商业统计学、财务报表分析、风险管理、高级财务管理、商业咨询</li>
+            <li>课程项目：上市公司财务风险建模项目，基于财报指标搭建盈利与偿债预测模型，完成同业对标分析</li>
+          </ul>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 实习经历 -->
+    <section>
+      <h2 class="sec-title">实习经历</h2>
+      <div class="items">
+        <article class="item">
+          <div class="item-head">
+            <h3 data-edit data-single>新西兰 Aplus Academy<span class="sep">·</span><span class="job">商业分析助理（市场方向）</span></h3>
+            <span class="date" data-edit data-single>2022.06 – 2024.10</span>
+          </div>
+          <ul class="desc" data-edit>
+            <li>搭建客户信息台账与咨询流程指标台账，沉淀 300+ 客户样本数据集，梳理咨询全链路 SOP，监控响应时长指标；流程优化后咨询响应时效提升 20%，稳定线索转化水平，为后续转化归因搭建标准化数据底座。</li>
+            <li>负责业务营收、获客成本、固定成本月度归集，搭建月度经营复盘表，跟踪预算执行偏差，对账差错率控制在 3% 以内；从收入-成本维度拆解业务毛利结构，输出月度经营复盘，支撑预算调整与盈利评估。</li>
+            <li>主导获客链路数据分析，拆解获客成本、线索转化率、客单价核心指标，横向对标竞品定价与投放策略做多维度归因分析；输出 8 份英文商业洞察报告，定位转化瓶颈与定价缺口，输出获客渠道优选、阶梯定价优化方案，支撑营销策略迭代。</li>
+            <li>承接业务侧数据分析需求，使用 Excel + AI 工具完成行业信息抓取、数据清洗与交叉分析，输出可落地运营优化方案；联动业务、财务跨团队对齐指标口径，同步市场反馈，推动咨询产品与服务流程迭代升级。</li>
+          </ul>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 商业分析项目经历 -->
+    <section>
+      <h2 class="sec-title">商业分析项目经历</h2>
+      <div class="items">
+        <article class="item">
+          <div class="item-head">
+            <h3 data-edit data-single>项目一：线上教育用户转化漏斗分析<span class="sep">·</span><span class="job">课程项目</span></h3>
+          </div>
+          <ul class="desc" data-edit>
+            <li>项目背景：模拟教培业务线索流失问题，定位转化瓶颈，挖掘增长机会</li>
+            <li>清洗用户行为数据集，搭建「曝光-留资-咨询-付费」全链路转化漏斗，计算各环节转化率</li>
+            <li>开展用户分群分析，对比不同投放渠道、客群的转化差异，识别高流失节点</li>
+            <li>测算不同优化方案的预估 ROI，输出渠道资源倾斜、咨询话术优化建议</li>
+            <li class="meta">工具：Python、Excel、PPT　｜　产出：完整商业分析报告</li>
+          </ul>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </article>
+
+        <article class="item">
+          <div class="item-head">
+            <h3 data-edit data-single>项目二：上市公司盈利与经营风险评估<span class="sep">·</span><span class="job">课程项目</span></h3>
+          </div>
+          <ul class="desc" data-edit>
+            <li>项目背景：基于公开财报数据，评估企业盈利质量与经营风险</li>
+            <li>提取利润表、资产负债表核心指标，搭建盈利、偿债、营运能力指标看板</li>
+            <li>拆解利润变动驱动因素，横向开展同业对标，识别经营短板</li>
+            <li>输出风险评估结论与经营改善建议</li>
+            <li class="meta">工具：Excel、财务建模、PPT　｜　产出：财务分析报告</li>
+          </ul>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 专业技能 -->
+    <section>
+      <h2 class="sec-title">专业技能</h2>
+      <div class="kv-list">
+        <div class="kv item">
+          <span class="kv-label" data-edit data-single>数据分析工具</span>
+          <span class="kv-text" data-edit>Excel（VLOOKUP、数据透视表、Power Query）、PPT 商业报告撰写；Python/R 基础（数据清洗、描述统计）；熟练运用 AI 工具辅助行业调研、数据挖掘与报告撰写</span>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </div>
+        <div class="kv item">
+          <span class="kv-label" data-edit data-single>业务分析能力</span>
+          <span class="kv-text" data-edit>指标体系搭建、漏斗归因分析、竞品对标、经营复盘、毛利测算、财务报表解读、定价策略分析</span>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </div>
+        <div class="kv item">
+          <span class="kv-label" data-edit data-single>语言能力</span>
+          <span class="kv-text" data-edit>英语流利（可作为工作语言），独立撰写英文商业分析报告；普通话流利</span>
+          <div class="item-tools">
+            <button class="t-add" title="在下方复制一条">+</button>
+            <button class="t-del" title="删除本条">×</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 自我评价 -->
+    <section>
+      <h2 class="sec-title">自我评价</h2>
+      <div class="summary" data-edit>
+        （建议补充 2–3 句：性格与协作风格、职业目标、与商业分析岗位的匹配亮点，写好后删除本提示）
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var LS_KEY = 'resume-editor-v2';
+  var $ = function(s){ return document.querySelector(s); };
+
+  var page        = $('#page');
+  var masthead    = $('#masthead');
+  var content     = $('#content');
+  var avatarInput = $('#avatarInput');
+  var btnMode     = $('#btnMode');
+  var btnPrint    = $('#btnPrint');
+  var btnReset    = $('#btnReset');
+  var tip         = $('#tip');
+
+  /* ---------- 提示 ---------- */
+  var tipTimer;
+  function showTip(text){
+    tip.textContent = text;
+    tip.style.opacity = '1';
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(function(){ tip.style.opacity = '0'; }, 1600);
+  }
+
+  /* ---------- 序列化 / 恢复 ---------- */
+  function serialize(){
+    var m = masthead.cloneNode(true);
+    var img = m.querySelector('#avatarImg');
+    if (img) img.removeAttribute('src');
+    var avatarImg = document.getElementById('avatarImg');
+    return {
+      m: m.innerHTML,
+      c: content.innerHTML,
+      a: (avatarImg && avatarImg.src && avatarImg.src.indexOf('data:') === 0) ? avatarImg.src : ''
+    };
+  }
+  function save(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify(serialize()));
+      showTip('✓ 已自动保存');
+    }catch(e){
+      showTip('保存失败（存储空间不足？）');
+    }
+  }
+  var saveTimer;
+  function queueSave(){
+    showTip('保存中…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 500);
+  }
+  function restore(){
+    var raw;
+    try{ raw = localStorage.getItem(LS_KEY); }catch(e){ return; }
+    if(!raw) return;
+    try{
+      var d = JSON.parse(raw);
+      if (d.m != null) masthead.innerHTML = d.m;
+      if (d.c != null) content.innerHTML = d.c;
+      if (d.a){
+        var img = document.getElementById('avatarImg');
+        img.src = d.a;
+        img.hidden = false;
+      }
+    }catch(e){ /* 数据损坏则忽略 */ }
+  }
+
+  /* ---------- 编辑 / 预览模式 ---------- */
+  function setEditable(on){
+    var nodes = page.querySelectorAll('[data-edit]');
+    for (var i = 0; i < nodes.length; i++){
+      nodes[i].setAttribute('contenteditable', on ? 'true' : 'false');
+    }
+  }
+  btnMode.addEventListener('click', function(){
+    var editing = document.body.classList.toggle('editing');
+    setEditable(editing);
+    btnMode.textContent = editing ? '● 编辑中' : '○ 预览中';
+    btnMode.classList.toggle('active', editing);
+  });
+
+  /* ---------- 导出 PDF（直接下载，无需选打印机） ---------- */
+  btnPrint.addEventListener('click', function(){
+    // 库未加载（离线等）时退回打印对话框
+    if (typeof html2pdf === 'undefined'){
+      showTip('离线模式：请在打印对话框左下角选「存储为 PDF」');
+      window.print();
+      return;
+    }
+    var wasEditing = document.body.classList.contains('editing');
+    var oldText = btnPrint.textContent;
+    btnPrint.disabled = true;
+    btnPrint.textContent = '生成中…';
+    // 临时切到预览态 + 导出态，保证截图纯净且无偏移
+    if (wasEditing){
+      document.body.classList.remove('editing');
+      setEditable(false);
+    }
+    document.body.classList.add('exporting');
+    var name = document.querySelector('.name').textContent.trim() || '简历';
+    var opt = {
+      margin: 0,
+      filename: name + '-简历.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] }
+    };
+    html2pdf().set(opt).from(document.getElementById('page')).save()
+      .then(function(){
+        showTip('✓ PDF 已保存到浏览器下载文件夹');
+      })
+      .catch(function(){
+        showTip('生成失败，已切换为打印方式');
+        window.print();
+      })
+      .then(function(){
+        btnPrint.disabled = false;
+        btnPrint.textContent = oldText;
+        document.body.classList.remove('exporting');
+        if (wasEditing){
+          document.body.classList.add('editing');
+          setEditable(true);
+        }
+      });
+  });
+
+  /* ---------- 重置 ---------- */
+  btnReset.addEventListener('click', function(){
+    if (confirm('确定要清空所有修改，恢复初始示例内容吗？')){
+      try{ localStorage.removeItem(LS_KEY); }catch(e){}
+      location.reload();
+    }
+  });
+
+  /* ---------- 头像 ---------- */
+  document.getElementById('avatarWrap').addEventListener('click', function(){
+    if (!document.body.classList.contains('editing')) return;
+    avatarInput.click();
+  });
+  avatarInput.addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      compressToSquare(reader.result, 300, function(dataURL){
+        var img = document.getElementById('avatarImg');
+        img.src = dataURL;
+        img.hidden = false;
+        queueSave();
+      });
+    };
+    reader.readAsDataURL(f);
+    this.value = '';
+  });
+  function compressToSquare(dataURL, size, cb){
+    var im = new Image();
+    im.onload = function(){
+      var c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';              // JPEG 无透明，先垫白底
+      ctx.fillRect(0, 0, size, size);
+      var s = Math.min(im.width, im.height); // 居中 cover 裁剪
+      ctx.drawImage(im, (im.width - s)/2, (im.height - s)/2, s, s, 0, 0, size, size);
+      cb(c.toDataURL('image/jpeg', 0.85));
+    };
+    im.src = dataURL;
+  }
+
+  /* ---------- 条目增删（事件委托，恢复 innerHTML 后依然有效） ---------- */
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    var add = t.closest ? t.closest('.t-add') : null;
+    var del = t.closest ? t.closest('.t-del') : null;
+    if (add){
+      var item = add.closest('.item');
+      if (item){
+        var clone = item.cloneNode(true);
+        item.after ? item.after(clone) : item.parentNode.insertBefore(clone, item.nextSibling);
+        queueSave();
+      }
+      return;
+    }
+    if (del){
+      var item2 = del.closest('.item');
+      if (item2){
+        item2.remove ? item2.remove() : item2.parentNode.removeChild(item2);
+        queueSave();
+      }
+    }
+  });
+
+  /* ---------- 模块级工具条：整块上移 / 下移 / 删除 ---------- */
+  function ensureSecTools(){
+    var secs = content.querySelectorAll('section');
+    for (var i = 0; i < secs.length; i++){
+      var s = secs[i];
+      var stale = s.querySelectorAll('.sec-tools'); // 先清掉残留，避免重复
+      for (var j = 0; j < stale.length; j++){
+        stale[j].parentNode.removeChild(stale[j]);
+      }
+      var div = document.createElement('div');
+      div.className = 'sec-tools';
+      div.innerHTML =
+        '<button class="s-up" title="整个模块上移">↑</button>' +
+        '<button class="s-down" title="整个模块下移">↓</button>' +
+        '<button class="s-del" title="删除整个模块">×</button>';
+      s.appendChild(div);
+    }
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    var up   = t.closest ? t.closest('.s-up')   : null;
+    var down = t.closest ? t.closest('.s-down') : null;
+    var sdel = t.closest ? t.closest('.s-del')  : null;
+    if (!up && !down && !sdel) return;
+    var sec = (up || down || sdel).closest('section');
+    if (!sec) return;
+    if (up){
+      var prev = sec.previousElementSibling;
+      if (prev) sec.parentNode.insertBefore(sec, prev);
+    } else if (down){
+      var next = sec.nextElementSibling;
+      if (next){
+        if (next.after) next.after(sec);
+        else sec.parentNode.insertBefore(sec, next.nextSibling);
+      }
+    } else {
+      var title = sec.querySelector('.sec-title');
+      var name = title ? title.textContent.replace(/\s+/g, '') : '该模块';
+      if (confirm('确定删除整个模块「' + name + '」吗？\n（可通过底部工具条「重置」找回示例）')){
+        sec.remove ? sec.remove() : sec.parentNode.removeChild(sec);
+      }
+    }
+    queueSave();
+  });
+
+  /* ---------- 输入：自动保存 + 技能条同步 ---------- */
+  document.addEventListener('input', function(e){
+    var t = e.target;
+    if (!t.closest || !t.closest('#page')) return;
+    if (t.classList && t.classList.contains('skill-val')){
+      var item = t.closest('.skill');
+      var fill = item && item.querySelector('.fill');
+      if (fill){
+        var n = parseFloat(t.textContent);
+        if (isNaN(n)) n = 0;
+        n = Math.max(0, Math.min(100, n));
+        fill.style.width = n + '%';
+      }
+    }
+    queueSave();
+  });
+
+  /* ---------- 粘贴纯文本，避免富文本样式污染 ---------- */
+  document.addEventListener('paste', function(e){
+    var ce = e.target.closest && e.target.closest('[contenteditable="true"]');
+    if (!ce) return;
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+
+  /* ---------- 单行字段回车即失焦 ---------- */
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-single]')){
+      e.preventDefault();
+      e.target.blur();
+    }
+  });
+
+  /* ---------- 初始化 ---------- */
+  restore();
+  setEditable(true);
+  ensureSecTools();
+})();
+</script>
+</body>
+</html>
