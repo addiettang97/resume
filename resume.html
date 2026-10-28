@@ -53,6 +53,26 @@ body{
   height:100%; width:50%;
   display:block;
 }
+/* 横幅左缘装饰：竖带 + 左下切角 + 上下两个色块 */
+.side-band{
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:14px;
+  background:#F08A8A;
+}
+.side-cut{
+  position:absolute;
+  left:0; bottom:0;
+  display:block;
+}
+.deco-band{
+  position:absolute;
+  left:0;
+  height:20px;
+  border-radius:0 8px 8px 0;
+}
+.deco-band.b1{ top:12px; width:150px; background:#8E1A1A; }
+.deco-band.b2{ bottom:12px; width:110px; background:#F08A8A; }
 .avatar{
   position:relative;
   flex:none;
@@ -99,8 +119,10 @@ body.editing .avatar:hover .avatar-mask{ display:flex; }
   display:flex; flex-wrap:wrap; gap:7px 24px;
 }
 .contacts li{
+  flex:none;
   display:flex; align-items:center; gap:6px;
   font-size:11px; color:rgba(255,255,255,.75);
+  white-space:nowrap;
 }
 .contacts li svg{
   width:12px; height:12px; flex:none;
@@ -376,6 +398,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
 <div class="toolbar">
   <button id="btnMode" class="active">● 编辑中</button>
+  <button id="btnTranslate">译成英文</button>
   <button id="btnPrint">导出 PDF</button>
   <button id="btnReset">重置</button>
   <span class="tip" id="tip"></span>
@@ -385,6 +408,12 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
   <!-- ======= 顶部黑底横幅 ======= -->
   <header id="masthead">
+    <div class="side-band"></div>
+    <svg class="side-cut" width="14" height="52" viewBox="0 0 14 52" aria-hidden="true">
+      <polygon points="0,0 14,52 0,52" fill="#141414"/>
+    </svg>
+    <div class="deco-band b1"></div>
+    <div class="deco-band b2"></div>
     <svg class="corner-tri" viewBox="0 0 400 156" preserveAspectRatio="none" aria-hidden="true">
       <polygon points="280,0 400,0 400,156 330,156" fill="#8E1A1A"/>
       <polygon points="280,0 330,156 0,156" fill="#F08A8A"/>
@@ -619,10 +648,10 @@ body.exporting .page{ margin:0; box-shadow:none; }
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 500);
   }
-  function restore(){
+  function restoreFrom(key){
     var raw;
-    try{ raw = localStorage.getItem(LS_KEY); }catch(e){ return; }
-    if(!raw) return;
+    try{ raw = localStorage.getItem(key); }catch(e){ return false; }
+    if(!raw) return false;
     try{
       var d = JSON.parse(raw);
       if (d.m != null) masthead.innerHTML = d.m;
@@ -632,8 +661,10 @@ body.exporting .page{ margin:0; box-shadow:none; }
         img.src = d.a;
         img.hidden = false;
       }
-    }catch(e){ /* 数据损坏则忽略 */ }
+      return true;
+    }catch(e){ return false; }
   }
+  function restore(){ restoreFrom(LS_KEY); }
 
   /* ---------- 编辑 / 预览模式 ---------- */
   function setEditable(on){
@@ -701,6 +732,85 @@ body.exporting .page{ margin:0; box-shadow:none; }
       try{ localStorage.removeItem(LS_KEY); }catch(e){}
       location.reload();
     }
+  });
+
+  /* ---------- 一键翻译（中 → 英，可切回） ---------- */
+  var ZH_SNAP = 'resume-editor-zh-snapshot';
+  var btnTranslate = $('#btnTranslate');
+
+  /* 收集所有可翻译的文本叶子（保留 h3 内 span 结构） */
+  function collectUnits(){
+    var units = [];
+    var nodes = page.querySelectorAll('[data-edit], .sec-title');
+    Array.prototype.forEach.call(nodes, function(el){
+      Array.prototype.forEach.call(el.childNodes, function(n){
+        if (n.nodeType === 3){                       /* 直接文本节点 */
+          if (n.textContent.trim()) units.push(n);
+        } else if (n.nodeType === 1 && (n.tagName === 'SPAN' || n.tagName === 'LI')){
+          if (n.classList && n.classList.contains('sep')) return;
+          if (n.textContent.trim()) units.push(n);
+        }
+      });
+    });
+    return units;
+  }
+  function gtx(q){
+    return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=' + encodeURIComponent(q))
+      .then(function(r){ return r.json(); })
+      .then(function(d){ return d[0].map(function(s){ return s[0]; }).join(''); });
+  }
+  function mm(q){
+    return fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) + '&langpair=zh|en')
+      .then(function(r){ return r.json(); })
+      .then(function(d){ return d.responseData.translatedText; });
+  }
+
+  btnTranslate.addEventListener('click', function(){
+    /* 已是英文态 → 切回中文快照 */
+    if (btnTranslate.classList.contains('en')){
+      if (!confirm('切回中文会覆盖当前英文内容（翻译后手动修改的部分也会还原），确定？')) return;
+      if (restoreFrom(ZH_SNAP)){
+        setEditable(document.body.classList.contains('editing'));
+        ensureSecTools();
+        save();
+        btnTranslate.classList.remove('en');
+        btnTranslate.textContent = '译成英文';
+        showTip('✓ 已切回中文');
+      } else {
+        showTip('未找到中文备份');
+      }
+      return;
+    }
+    var units = collectUnits().filter(function(n){
+      return /[\u4e00-\u9fa5]/.test(n.textContent);
+    });
+    if (!units.length){ showTip('未发现中文内容'); return; }
+    if (!confirm('将把全部中文内容翻译成英文，中文原文自动备份、可随时切回。确定？')) return;
+    try{ localStorage.setItem(ZH_SNAP, JSON.stringify(serialize())); }catch(e){}
+    btnTranslate.disabled = true;
+    btnTranslate.textContent = '翻译中…';
+    var i = 0, total = units.length;
+    function nextBatch(){
+      var batch = [];
+      while (i < units.length && batch.length < 5) batch.push(units[i++]);
+      if (!batch.length) return Promise.resolve();
+      return Promise.all(batch.map(function(n){
+        var src = n.textContent;
+        return gtx(src).catch(function(){ return mm(src); }).then(function(t){
+          if (t && t.trim()) n.textContent = t;
+        }).catch(function(){ /* 单条失败保留原文 */ });
+      })).then(function(){
+        showTip('翻译中 ' + Math.min(i, total) + '/' + total);
+        return nextBatch();
+      });
+    }
+    nextBatch().then(function(){
+      btnTranslate.disabled = false;
+      btnTranslate.classList.add('en');
+      btnTranslate.textContent = '切回中文';
+      queueSave();
+      showTip('✓ 已翻译成英文');
+    });
   });
 
   /* ---------- 头像 ---------- */
