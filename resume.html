@@ -381,6 +381,89 @@ body.editing section:hover > .sec-tools{ display:flex; }
   white-space:nowrap;
 }
 
+/* ============ 历史版本面板 ============ */
+.versions-overlay{
+  position:fixed; inset:0; z-index:120;
+  background:rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+.versions-overlay[hidden]{ display:none; }
+.versions-panel{
+  width:430px; max-width:100%;
+  max-height:80vh;
+  background:#fff;
+  border-radius:14px;
+  overflow:hidden;
+  display:flex; flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.32);
+}
+.versions-head{
+  flex:none;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:15px 20px;
+  background:var(--ink); color:#fff;
+}
+.versions-head h3{
+  font-size:14px; font-weight:700; letter-spacing:3px;
+  display:flex; align-items:center; gap:8px;
+}
+.versions-head h3::before{
+  content:''; width:4px; height:13px;
+  background:var(--red); border-radius:1px;
+}
+.versions-head button{
+  border:none; background:transparent; color:rgba(255,255,255,.7);
+  font-size:18px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:6px;
+}
+.versions-head button:hover{ background:rgba(255,255,255,.14); color:#fff; }
+.v-save-btn{
+  flex:none;
+  margin:14px 16px 4px;
+  padding:9px 14px;
+  border:none; border-radius:8px;
+  background:var(--red); color:#fff;
+  font-size:12.5px; font-weight:600; font-family:inherit;
+  cursor:pointer;
+}
+.v-save-btn:hover{ background:#C1121F; }
+.versions-list{
+  overflow:auto;
+  padding:6px 12px 14px;
+}
+.v-item{
+  display:flex; align-items:center; gap:8px;
+  padding:10px 8px;
+  border-bottom:1px solid var(--hair);
+}
+.v-item:last-child{ border-bottom:none; }
+.v-info{ flex:1; min-width:0; }
+.v-name{
+  font-size:13px; font-weight:600; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.v-time{
+  margin-top:2px;
+  font-size:10.5px; color:var(--muted);
+}
+.v-actions{ display:flex; gap:5px; flex:none; }
+.v-actions button{
+  width:22px; height:22px;
+  border:none; border-radius:50%;
+  background:rgba(17,17,17,.08); color:var(--ink);
+  font-size:11px; line-height:22px; text-align:center;
+  cursor:pointer; font-family:inherit;
+}
+.v-actions button:hover{ background:var(--ink); color:#fff; }
+.v-actions .v-del:hover{ background:var(--red); }
+.v-empty{
+  padding:34px 0 28px;
+  text-align:center;
+  font-size:11.5px; line-height:1.8;
+  color:var(--muted);
+}
+@media print{ .versions-overlay{ display:none !important; } }
+
 /* ============ 导出态（截图前临时应用） ============ */
 body.exporting{ padding:0; }
 body.exporting .page{ margin:0; box-shadow:none; }
@@ -405,10 +488,24 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
 <div class="toolbar">
   <button id="btnMode" class="active">● 编辑中</button>
+  <button id="btnSave">保存</button>
   <button id="btnTranslate">译成英文</button>
   <button id="btnPrint">导出 PDF</button>
+  <button id="btnVersions">版本</button>
   <button id="btnReset">重置</button>
   <span class="tip" id="tip"></span>
+</div>
+
+<!-- 历史版本面板 -->
+<div class="versions-overlay" id="versionsOverlay" hidden>
+  <div class="versions-panel">
+    <div class="versions-head">
+      <h3>历史版本</h3>
+      <button id="vClose" title="关闭">×</button>
+    </div>
+    <button class="v-save-btn" id="vSave">＋ 将当前内容存为版本</button>
+    <div class="versions-list" id="versionsList"></div>
+  </div>
 </div>
 
 <div class="page" id="page">
@@ -642,11 +739,19 @@ body.exporting .page{ margin:0; box-shadow:none; }
   function save(){
     try{
       localStorage.setItem(LS_KEY, JSON.stringify(serialize()));
-      showTip('✓ 已自动保存');
+      showTip('✓ 已保存');
     }catch(e){
       showTip('保存失败（存储空间不足？）');
     }
   }
+  /* ---------- 显式保存：按钮 + Ctrl/Cmd + S ---------- */
+  $('#btnSave').addEventListener('click', function(){ save(); });
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')){
+      e.preventDefault();
+      save();
+    }
+  });
   var saveTimer;
   function queueSave(){
     showTip('保存中…');
@@ -660,19 +765,21 @@ body.exporting .page{ margin:0; box-shadow:none; }
       save();
     }
   });
+  function applySnapshot(d){
+    if (d.m != null) masthead.innerHTML = d.m;
+    if (d.c != null) content.innerHTML = d.c;
+    if (d.a){
+      var img = document.getElementById('avatarImg');
+      img.src = d.a;
+      img.hidden = false;
+    }
+  }
   function restoreFrom(key){
     var raw;
     try{ raw = localStorage.getItem(key); }catch(e){ return false; }
     if(!raw) return false;
     try{
-      var d = JSON.parse(raw);
-      if (d.m != null) masthead.innerHTML = d.m;
-      if (d.c != null) content.innerHTML = d.c;
-      if (d.a){
-        var img = document.getElementById('avatarImg');
-        img.src = d.a;
-        img.hidden = false;
-      }
+      applySnapshot(JSON.parse(raw));
       return true;
     }catch(e){ return false; }
   }
@@ -992,6 +1099,120 @@ body.exporting .page{ margin:0; box-shadow:none; }
       cli.setAttribute('data-icon', next);
       svg.innerHTML = CONTACT_ICONS[next];
       queueSave();
+    }
+  });
+
+  /* ---------- 历史版本（命名保存 / 恢复 / 重命名 / 删除） ---------- */
+  var VER_KEY = 'resume-versions';
+  var overlay = $('#versionsOverlay');
+
+  function getVersions(){
+    try{ return JSON.parse(localStorage.getItem(VER_KEY)) || []; }catch(e){ return []; }
+  }
+  function setVersions(list){
+    try{
+      localStorage.setItem(VER_KEY, JSON.stringify(list));
+      return true;
+    }catch(e){
+      showTip('保存失败：本地存储空间不足');
+      return false;
+    }
+  }
+  function fmtTime(ts){
+    var d = new Date(ts);
+    function p(n){ return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function renderVersions(){
+    var list = getVersions();
+    var box = $('#versionsList');
+    if (!list.length){
+      box.innerHTML = '<div class="v-empty">暂无历史版本<br>点击上方按钮，把当前简历保存为命名版本</div>';
+      return;
+    }
+    var names = [];
+    box.innerHTML = list.map(function(v){
+      names.push(v.name);
+      return '<div class="v-item" data-id="' + v.id + '">' +
+        '<div class="v-info"><div class="v-name"></div><div class="v-time">' + fmtTime(v.time) + '</div></div>' +
+        '<div class="v-actions">' +
+          '<button class="v-update" title="用当前内容覆盖此版本">⇩</button>' +
+          '<button class="v-restore" title="恢复此版本">↩</button>' +
+          '<button class="v-rename" title="重命名">✎</button>' +
+          '<button class="v-del" title="删除">×</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    var nameEls = box.querySelectorAll('.v-name');
+    names.forEach(function(n, i){ nameEls[i].textContent = n; }); /* textContent 防注入 */
+  }
+
+  $('#btnVersions').addEventListener('click', function(){
+    renderVersions();
+    overlay.hidden = false;
+  });
+  $('#vClose').addEventListener('click', function(){ overlay.hidden = true; });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.hidden = true; });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && !overlay.hidden) overlay.hidden = true;
+  });
+
+  $('#vSave').addEventListener('click', function(){
+    var list = getVersions();
+    if (list.length >= 20){
+      alert('最多保存 20 个版本，请先删除不用的旧版本');
+      return;
+    }
+    var name = prompt('给这个版本起个名字：', '版本 ' + (list.length + 1) + ' · ' + fmtTime(Date.now()).slice(5));
+    if (name === null) return;
+    name = name.trim();
+    if (!name) name = '版本 ' + (list.length + 1);
+    list.unshift({ id: Date.now(), name: name, time: Date.now(), data: serialize() });
+    if (setVersions(list)){
+      renderVersions();
+      showTip('✓ 已保存版本「' + name + '」');
+    }
+  });
+
+  $('#versionsList').addEventListener('click', function(e){
+    var t = e.target;
+    if (!t.closest) return;
+    var item = t.closest('.v-item');
+    if (!item) return;
+    var id = Number(item.getAttribute('data-id'));
+    var list = getVersions();
+    var idx = -1;
+    for (var i = 0; i < list.length; i++){ if (list[i].id === id){ idx = i; break; } }
+    if (idx < 0) return;
+
+    if (t.closest('.v-update')){
+      if (!confirm('用当前内容覆盖版本「' + list[idx].name + '」？\n该版本原有内容将被替换。')) return;
+      list[idx].data = serialize();
+      list[idx].time = Date.now();
+      if (setVersions(list)){
+        renderVersions();
+        showTip('✓ 版本「' + list[idx].name + '」已更新');
+      }
+    } else if (t.closest('.v-restore')){
+      if (!confirm('恢复版本「' + list[idx].name + '」？\n当前未保存的修改将丢失（恢复前会先自动保存当前内容到主档）。')) return;
+      applySnapshot(list[idx].data);
+      setEditable(document.body.classList.contains('editing'));
+      ensureSecTools();
+      save();
+      overlay.hidden = true;
+      showTip('✓ 已恢复「' + list[idx].name + '」');
+    } else if (t.closest('.v-rename')){
+      var nn = prompt('新名称：', list[idx].name);
+      if (nn === null) return;
+      nn = nn.trim();
+      if (nn){
+        list[idx].name = nn;
+        if (setVersions(list)) renderVersions();
+      }
+    } else if (t.closest('.v-del')){
+      if (!confirm('删除版本「' + list[idx].name + '」？此操作不可撤销。')) return;
+      list.splice(idx, 1);
+      if (setVersions(list)) renderVersions();
     }
   });
 
