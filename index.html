@@ -137,6 +137,7 @@ body.editing .c-add{ display:block; }
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
 }
 .tagline{
+  position:relative;
   margin-top:14px;
   display:flex; align-items:center; gap:8px;
   font-size:11px; color:rgba(255,255,255,.72);
@@ -148,6 +149,29 @@ body.editing .c-add{ display:block; }
   background:var(--red-bright);
   transform:rotate(45deg);
 }
+.tagline.hidden-line{ display:none; }
+.tagline-del{
+  position:absolute; top:-9px; right:-4px;
+  display:none;
+  width:15px; height:15px;
+  border:none; border-radius:50%;
+  background:var(--red); color:#fff;
+  font-size:9px; line-height:15px; text-align:center;
+  cursor:pointer;
+  box-shadow:0 2px 5px rgba(0,0,0,.35);
+}
+body.editing .tagline:hover .tagline-del{ display:block; }
+.tagline-restore{
+  display:none;
+  margin-top:14px;
+  padding:5px 14px;
+  border:1.5px dashed rgba(255,90,102,.6); border-radius:8px;
+  background:transparent; color:var(--red-bright);
+  font-size:10.5px; font-family:inherit;
+  cursor:pointer; letter-spacing:1px;
+}
+body.editing .tagline-restore:hover{ background:rgba(255,90,102,.12); }
+body.editing .tagline.hidden-line ~ .tagline-restore{ display:inline-block; }
 
 /* ============ 正文区 ============ */
 #content{ padding:16px 42px 26px; flex:1; }
@@ -485,11 +509,13 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
 <!-- 隐藏文件选择器（放在纸面外，避免被序列化保存） -->
 <input type="file" id="avatarInput" accept="image/*" hidden>
+<input type="file" id="importPdfInput" accept="application/pdf" hidden>
 
 <div class="toolbar">
   <button id="btnMode" class="active">● 编辑中</button>
   <button id="btnSave">保存</button>
   <button id="btnTranslate">译成英文</button>
+  <button id="btnImport">导入 PDF</button>
   <button id="btnPrint">导出 PDF</button>
   <button id="btnVersions">版本</button>
   <button id="btnReset">重置</button>
@@ -552,7 +578,10 @@ body.exporting .page{ margin:0; box-shadow:none; }
         </li>
         <button class="c-add" title="新增一条联系方式">+</button>
       </ul>
-      <p class="tagline" data-edit data-single>会计金融 + 商业分析复合背景，可独立输出英文商业分析报告</p>
+      <p class="tagline" data-edit data-single>会计金融 + 商业分析复合背景，可独立输出英文商业分析报告
+        <button class="tagline-del" contenteditable="false" title="隐藏标签行">×</button>
+      </p>
+      <button class="tagline-restore" title="显示标签行">＋ 标签行</button>
     </div>
   </header>
 
@@ -561,7 +590,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
     <!-- 教育背景 -->
     <section>
-      <h2 class="sec-title">教育背景</h2>
+      <h2 class="sec-title" data-edit data-single>教育背景</h2>
       <div class="items">
         <article class="item">
           <div class="item-head">
@@ -597,7 +626,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
     <!-- 实习经历 -->
     <section>
-      <h2 class="sec-title">实习经历</h2>
+      <h2 class="sec-title" data-edit data-single>实习经历</h2>
       <div class="items">
         <article class="item">
           <div class="item-head">
@@ -620,7 +649,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
     <!-- 商业分析项目经历 -->
     <section>
-      <h2 class="sec-title">商业分析项目经历</h2>
+      <h2 class="sec-title" data-edit data-single>商业分析项目经历</h2>
       <div class="items">
         <article class="item">
           <div class="item-head">
@@ -660,7 +689,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
     <!-- 专业技能 -->
     <section>
-      <h2 class="sec-title">专业技能</h2>
+      <h2 class="sec-title" data-edit data-single>专业技能</h2>
       <div class="kv-list">
         <div class="kv item">
           <span class="kv-label" data-edit data-single>数据分析工具</span>
@@ -691,7 +720,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
     <!-- 自我评价 -->
     <section>
-      <h2 class="sec-title">自我评价</h2>
+      <h2 class="sec-title" data-edit data-single>自我评价</h2>
       <div class="summary" data-edit>
         （建议补充 2–3 句：性格与协作风格、职业目标、与商业分析岗位的匹配亮点，写好后删除本提示）
       </div>
@@ -710,6 +739,7 @@ body.exporting .page{ margin:0; box-shadow:none; }
   var masthead    = $('#masthead');
   var content     = $('#content');
   var avatarInput = $('#avatarInput');
+  var importPdfInput = $('#importPdfInput');
   var btnMode     = $('#btnMode');
   var btnPrint    = $('#btnPrint');
   var btnReset    = $('#btnReset');
@@ -787,6 +817,24 @@ body.exporting .page{ margin:0; box-shadow:none; }
 
   /* ---------- 编辑 / 预览模式 ---------- */
   function setEditable(on){
+    /* 兼容旧存档：补齐章节标题缺失的可编辑标记 */
+    var secs = content.querySelectorAll('.sec-title:not([data-edit])');
+    for (var s = 0; s < secs.length; s++){
+      secs[s].setAttribute('data-edit', '');
+      secs[s].setAttribute('data-single', '');
+    }
+    /* 兼容旧存档：补齐标签行缺失的删除按钮 */
+    var tls = masthead.querySelectorAll('.tagline');
+    for (var t2 = 0; t2 < tls.length; t2++){
+      if (!tls[t2].querySelector('.tagline-del')){
+        var bd = document.createElement('button');
+        bd.className = 'tagline-del';
+        bd.setAttribute('contenteditable', 'false');
+        bd.setAttribute('title', '隐藏标签行');
+        bd.textContent = '×';
+        tls[t2].appendChild(bd);
+      }
+    }
     var nodes = page.querySelectorAll('[data-edit]');
     for (var i = 0; i < nodes.length; i++){
       nodes[i].setAttribute('contenteditable', on ? 'true' : 'false');
@@ -797,6 +845,40 @@ body.exporting .page{ margin:0; box-shadow:none; }
     setEditable(editing);
     btnMode.textContent = editing ? '● 编辑中' : '○ 预览中';
     btnMode.classList.toggle('active', editing);
+  });
+
+  /* ---------- 导入 PDF：提取尾部嵌入数据，精确回显 ---------- */
+  var PDF_TAG = '%%RESUME-DATA-V1%%';
+  var PDF_TAG_END = '%%RESUME-DATA-END%%';
+  $('#btnImport').addEventListener('click', function(){
+    if (!confirm('导入 PDF 将恢复该 PDF 导出时的完整简历内容（含头像、模块结构），并覆盖当前内容。确定？')) return;
+    importPdfInput.click();
+  });
+  importPdfInput.addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    if (!f) return;
+    this.value = '';
+    f.text().then(function(text){
+      var s = text.indexOf(PDF_TAG);
+      if (s < 0){
+        showTip('该 PDF 未包含编辑器数据（需用本编辑器「导出 PDF」生成）');
+        return;
+      }
+      var e = text.indexOf(PDF_TAG_END, s);
+      if (e < 0){ showTip('PDF 数据不完整'); return; }
+      try{
+        var b64 = text.slice(s + PDF_TAG.length, e).trim();
+        var json = decodeURIComponent(escape(atob(b64)));
+        save();                                   /* 先保存当前内容到主档 */
+        applySnapshot(JSON.parse(json));
+        setEditable(document.body.classList.contains('editing'));
+        ensureSecTools();
+        save();
+        showTip('✓ 已从 PDF 恢复简历');
+      }catch(err){
+        showTip('PDF 数据解析失败');
+      }
+    });
   });
 
   /* ---------- 导出 PDF（直接下载，无需选打印机） ---------- */
@@ -826,8 +908,22 @@ body.exporting .page{ margin:0; box-shadow:none; }
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['css', 'legacy'] }
     };
-    html2pdf().set(opt).from(document.getElementById('page')).save()
-      .then(function(){
+    var PDF_TAG = '%%RESUME-DATA-V1%%';
+    var PDF_TAG_END = '%%RESUME-DATA-END%%';
+    html2pdf().set(opt).from(document.getElementById('page')).toPdf().outputPdf('blob')
+      .then(function(blob){
+        /* 简历数据嵌入 PDF 尾部：PDF 阅读器忽略 %%EOF 后数据，可用于日后导入回显 */
+        var payload = '\n' + PDF_TAG + '\n' +
+          btoa(unescape(encodeURIComponent(JSON.stringify(serialize())))) +
+          '\n' + PDF_TAG_END + '\n';
+        var full = new Blob([blob, payload], { type: 'application/pdf' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(full);
+        a.download = name + '-简历.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000);
         showTip('✓ PDF 已保存到浏览器下载文件夹');
       })
       .catch(function(){
@@ -1089,6 +1185,24 @@ body.exporting .page{ margin:0; box-shadow:none; }
       var sp = nli.querySelector('span');
       if (sp && document.body.classList.contains('editing')) sp.focus();
       queueSave();
+      return;
+    }
+    var tdel = t.closest('.tagline-del');
+    if (tdel){
+      var tl = document.querySelector('.tagline');
+      if (tl){
+        tl.classList.add('hidden-line');
+        queueSave();
+      }
+      return;
+    }
+    var trs = t.closest('.tagline-restore');
+    if (trs){
+      var tl2 = document.querySelector('.tagline');
+      if (tl2){
+        tl2.classList.remove('hidden-line');
+        queueSave();
+      }
       return;
     }
     var svg = t.closest('.contacts li svg');
